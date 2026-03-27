@@ -4,12 +4,83 @@
  */
 
 import { CircuitBoard } from './components/CircuitBoard';
-import { ArrowRight, Terminal, Cpu, Network } from 'lucide-react';
+import { ArrowRight, Terminal, Cpu, Network, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useState } from 'react';
+import { GoogleGenAI } from '@google/genai';
 
 export default function App() {
+  const [bgImage, setBgImage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateBackground = async () => {
+    try {
+      setIsGenerating(true);
+      // @ts-ignore
+      if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+        // @ts-ignore
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          // @ts-ignore
+          await window.aistudio.openSelectKey();
+        }
+      }
+
+      // Create a new instance right before the call to get the latest key
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-image-preview',
+        contents: {
+          parts: [
+            { text: 'A dark, modern, abstract tech background with subtle glowing circuit lines and a deep blue/purple gradient. Suitable for an AI API gateway landing page. Minimalist, high quality, 16:9 aspect ratio, no text.' }
+          ]
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9",
+            imageSize: "2K"
+          }
+        }
+      });
+      
+      const parts = response.candidates?.[0]?.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData) {
+          const base64EncodeString = part.inlineData.data;
+          const imageUrl = `data:${part.inlineData.mimeType || 'image/jpeg'};base64,${base64EncodeString}`;
+          setBgImage(imageUrl);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to generate background:", error);
+      alert("生成背景失败，请确保您已选择有效的 API Key。");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-surface text-on-surface overflow-hidden font-sans selection:bg-primary/20">
+    <div 
+      className="min-h-screen bg-surface text-on-surface overflow-hidden font-sans selection:bg-primary/20 relative transition-all duration-1000"
+      style={bgImage ? {
+        backgroundImage: `linear-gradient(to bottom, rgba(11, 28, 48, 0.8), rgba(11, 28, 48, 0.95)), url(${bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed'
+      } : {}}
+    >
+      {/* Floating Generate Button */}
+      <button 
+        onClick={generateBackground}
+        disabled={isGenerating}
+        className="fixed bottom-8 right-8 z-50 flex items-center gap-2 bg-surface-container-high hover:bg-surface-container-highest text-on-surface px-4 py-3 rounded-full shadow-ambient transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-outline-variant/20"
+      >
+        {isGenerating ? <Loader2 className="w-5 h-5 animate-spin text-primary" /> : <ImageIcon className="w-5 h-5 text-primary" />}
+        <span className="text-sm font-medium">{isGenerating ? '生成中...' : 'AI 生成背景'}</span>
+      </button>
+
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-[12px] border-b border-outline-variant/15">
         <div className="container mx-auto px-8 py-4 flex items-center justify-between">
