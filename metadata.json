@@ -1,0 +1,5 @@
+{
+  "name": "AI Gateway Hero",
+  "description": "A hero page featuring an animated circuit board gateway connecting to various LLMs.",
+  "requestFramePermissions": []
+}
