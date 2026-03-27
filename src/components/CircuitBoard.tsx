@@ -1,6 +1,6 @@
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { Terminal, Sparkles, Aperture, Hexagon, Zap, Network, Layers } from 'lucide-react';
+import { Sparkles, Aperture, Hexagon, Zap, Network, Layers } from 'lucide-react';
 
 const MODELS = [
   { id: 'gemini', name: 'Gemini 3.1', color: '#4f46e5', x: 15, y: 15, Icon: Sparkles },
@@ -12,24 +12,61 @@ const MODELS = [
 ];
 
 const getPath = (model: typeof MODELS[0]) => {
-  if (model.x === 15 && model.y === 15) return `M 15 15 L 45 15 L 45 50 L 55 50 L 90 50`;
-  if (model.x === 15 && model.y === 50) return `M 15 50 L 55 50 L 90 50`;
-  if (model.x === 15 && model.y === 85) return `M 15 85 L 45 85 L 45 50 L 55 50 L 90 50`;
-  if (model.x === 35 && model.y === 25) return `M 35 25 L 55 25 L 55 50 L 90 50`;
-  if (model.x === 35 && model.y === 75) return `M 35 75 L 55 75 L 55 50 L 90 50`;
-  if (model.x === 55 && model.y === 15) return `M 55 15 L 55 50 L 90 50`;
-  return `M ${model.x} ${model.y} L 55 ${model.y} L 55 50 L 90 50`;
+  const endX = 82;
+  
+  if (model.id === 'gemini') return `M 19 15 L 44 15 L 44 44 L 55 44 L 55 50 L ${endX} 50`;
+  if (model.id === 'gpt') return `M 19 50 L ${endX} 50`;
+  if (model.id === 'grok') return `M 19 85 L 44 85 L 44 56 L 55 56 L 55 50 L ${endX} 50`;
+  if (model.id === 'claude') return `M 39 25 L 41 25 L 41 47 L 55 47 L 55 50 L ${endX} 50`;
+  if (model.id === 'glm') return `M 39 75 L 41 75 L 41 53 L 55 53 L 55 50 L ${endX} 50`;
+  if (model.id === 'minimax') return `M 55 20 L 55 50 L ${endX} 50`;
+  
+  return `M ${model.x + 4} ${model.y} L 55 ${model.y} L 55 50 L ${endX} 50`;
 };
 
+interface Pulse {
+  id: number;
+  modelIndex: number;
+  duration: number;
+}
+
 export function CircuitBoard() {
-  const [activeNode, setActiveNode] = useState(0);
+  const [pulses, setPulses] = useState<Pulse[]>([]);
 
   useEffect(() => {
+    let pulseId = 0;
+    // Fire a new pulse every 800ms
     const interval = setInterval(() => {
-      setActiveNode((prev) => (prev + 1) % MODELS.length);
-    }, 3000);
+      // 30% chance to fire 2 models at the same time
+      const numPulses = Math.random() > 0.7 ? 2 : 1;
+      
+      const newPulses: Pulse[] = [];
+      for (let i = 0; i < numPulses; i++) {
+        const modelIndex = Math.floor(Math.random() * MODELS.length);
+        // Random duration between 2.0s and 4.5s for variable speed
+        const duration = 2.0 + Math.random() * 2.5;
+        const id = pulseId++;
+        newPulses.push({ id, modelIndex, duration });
+        
+        // Remove this specific pulse after its animation completes
+        setTimeout(() => {
+          setPulses(prev => prev.filter(p => p.id !== id));
+        }, duration * 1000);
+      }
+      
+      setPulses(prev => [...prev, ...newPulses]);
+    }, 800);
+
     return () => clearInterval(interval);
   }, []);
+
+  const activeModelIndices = Array.from(new Set(pulses.map(p => p.modelIndex)));
+  const activeColors = activeModelIndices.map(i => MODELS[i].color);
+  const latestColor = activeColors.length > 0 ? activeColors[activeColors.length - 1] : 'var(--color-outline-variant)';
+
+  const combinedShadow = activeColors.length > 0
+    ? activeColors.map(c => `0 12px 32px -4px ${c}50`).join(', ')
+    : `0 12px 32px -4px rgba(11, 28, 48, 0.08)`;
 
   return (
     <div className="relative w-full h-full max-w-[600px] max-h-[500px] rounded-xl overflow-hidden bg-surface-container-low">
@@ -43,67 +80,71 @@ export function CircuitBoard() {
       />
 
       {/* SVG Connections */}
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+          <filter id="glow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="140" height="140">
             <feGaussianBlur stdDeviation="2" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>
         
-        {MODELS.map((model, index) => {
-          const isActive = activeNode === index;
-          const path = getPath(model);
-          
-          return (
-            <g key={model.id}>
-              {/* Base Line */}
-              <path
-                d={path}
-                fill="none"
-                stroke="var(--color-outline-variant)"
-                strokeOpacity="0.4"
-                strokeWidth="0.4"
-                strokeLinejoin="round"
-                strokeDasharray="1 1"
-              />
-              {/* Animated Pulse */}
-              <motion.path
-                d={path}
-                fill="none"
-                stroke={model.color}
-                strokeWidth="0.8"
-                strokeLinejoin="round"
-                filter="url(#glow)"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ 
-                  pathLength: isActive ? [0, 1] : 0,
-                  opacity: isActive ? [0, 0.8, 0] : 0
-                }}
-                transition={{ 
-                  duration: 3, 
-                  ease: "easeInOut",
-                  times: [0, 0.5, 1]
-                }}
-              />
-              {/* Data Packet Dot */}
-              {isActive && (
+        {/* Base Lines */}
+        {MODELS.map((model) => (
+          <path
+            key={`base-${model.id}`}
+            d={getPath(model)}
+            fill="none"
+            stroke="var(--color-outline-variant)"
+            strokeOpacity="0.4"
+            strokeWidth="0.2"
+            strokeLinejoin="round"
+            strokeDasharray="1 1"
+          />
+        ))}
+
+        {/* Animated Pulses */}
+        <AnimatePresence>
+          {pulses.map((pulse) => {
+            const model = MODELS[pulse.modelIndex];
+            const path = getPath(model);
+            return (
+              <g key={`pulse-${pulse.id}`}>
+                <motion.path
+                  d={path}
+                  fill="none"
+                  stroke={model.color}
+                  strokeWidth="0.4"
+                  strokeLinejoin="round"
+                  filter="url(#glow)"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ 
+                    pathLength: [0, 1],
+                    opacity: [0, 0.8, 0]
+                  }}
+                  exit={{ opacity: 0 }}
+                  transition={{ 
+                    duration: pulse.duration, 
+                    ease: "easeInOut",
+                    times: [0, 0.5, 1]
+                  }}
+                />
                 <motion.circle
-                  r="1.2"
+                  r="0.8"
                   fill={model.color}
                   filter="url(#glow)"
                   initial={{ opacity: 0 }}
                   animate={{
                     opacity: [0, 1, 1, 0]
                   }}
+                  exit={{ opacity: 0 }}
                   transition={{
-                    duration: 3,
+                    duration: pulse.duration,
                     ease: "linear",
                     times: [0, 0.1, 0.9, 1]
                   }}
                 >
                   <animateMotion
-                    dur="3s"
+                    dur={`${pulse.duration}s`}
                     repeatCount="1"
                     path={path}
                     keyPoints="0;1"
@@ -111,15 +152,15 @@ export function CircuitBoard() {
                     calcMode="linear"
                   />
                 </motion.circle>
-              )}
-            </g>
-          );
-        })}
+              </g>
+            );
+          })}
+        </AnimatePresence>
       </svg>
 
       {/* Nodes */}
       {MODELS.map((model, index) => {
-        const isActive = activeNode === index;
+        const isActive = activeModelIndices.includes(index);
         return (
           <div
             key={model.id}
@@ -129,10 +170,15 @@ export function CircuitBoard() {
             <motion.div
               className="w-12 h-12 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-ambient relative z-10 overflow-hidden"
               animate={{
-                scale: isActive ? 1.05 : 1,
-                boxShadow: isActive ? `0 12px 32px -4px ${model.color}30` : '0 12px 32px -4px rgba(11, 28, 48, 0.08)'
+                scale: isActive ? 1.15 : 1,
+                boxShadow: isActive ? `0 12px 32px -4px ${model.color}60` : '0 12px 32px -4px rgba(11, 28, 48, 0.08)',
+                opacity: isActive ? [1, 0.6, 1] : 1
               }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
+              transition={{ 
+                scale: { duration: 0.2, ease: "easeOut" },
+                boxShadow: { duration: 0.2, ease: "easeOut" },
+                opacity: { duration: 2, ease: "easeInOut", repeat: isActive ? Infinity : 0 }
+              }}
             >
               {/* Ghost border fallback */}
               <div className="absolute inset-0 rounded-xl border border-outline-variant opacity-15 pointer-events-none" />
@@ -145,8 +191,8 @@ export function CircuitBoard() {
               {/* Active overlay wash */}
               <motion.div 
                 className="absolute inset-0 pointer-events-none"
-                animate={{ backgroundColor: isActive ? `${model.color}08` : 'transparent' }}
-                transition={{ duration: 0.4 }}
+                animate={{ backgroundColor: isActive ? `${model.color}15` : 'transparent' }}
+                transition={{ duration: 0.2 }}
               />
             </motion.div>
             <span className="text-[0.6875rem] font-sans font-semibold uppercase tracking-wider text-on-surface-variant">
@@ -161,13 +207,9 @@ export function CircuitBoard() {
         <motion.div 
           className="w-28 h-28 rounded-2xl bg-surface-container-lowest flex items-center justify-center relative shadow-ambient overflow-hidden"
           animate={{
-            boxShadow: [
-              `0 12px 32px -4px rgba(11, 28, 48, 0.08)`, 
-              `0 12px 32px -4px ${MODELS[activeNode].color}40`, 
-              `0 12px 32px -4px rgba(11, 28, 48, 0.08)`
-            ]
+            boxShadow: combinedShadow
           }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
         >
           {/* Ghost border */}
           <div className="absolute inset-0 rounded-2xl border border-outline-variant opacity-15 pointer-events-none" />
@@ -175,23 +217,23 @@ export function CircuitBoard() {
           {/* Inner chip details */}
           <motion.div 
             className="absolute inset-3 rounded-xl border border-outline-variant/10 bg-surface/50 backdrop-blur-sm"
-            animate={{ backgroundColor: `${MODELS[activeNode].color}05` }}
-            transition={{ duration: 0.5 }}
+            animate={{ backgroundColor: activeColors.length > 0 ? `${latestColor}05` : 'transparent' }}
+            transition={{ duration: 0.3 }}
           />
           <motion.div 
             className="absolute inset-5 rounded-lg flex items-center justify-center border border-outline-variant/20 bg-surface-container-lowest"
             animate={{ 
-              borderColor: `${MODELS[activeNode].color}30`,
-              backgroundColor: `${MODELS[activeNode].color}0a`
+              borderColor: activeColors.length > 0 ? `${latestColor}30` : 'var(--color-outline-variant)',
+              backgroundColor: activeColors.length > 0 ? `${latestColor}0a` : 'transparent'
             }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.3 }}
           >
             <motion.span 
               className="font-display font-bold text-[0.6875rem] tracking-widest uppercase"
-              animate={{ color: MODELS[activeNode].color }}
-              transition={{ duration: 0.5 }}
+              animate={{ color: activeColors.length > 0 ? latestColor : 'var(--color-on-surface-variant)' }}
+              transition={{ duration: 0.3 }}
             >
-              GATEWAY
+              OGOG.AI
             </motion.span>
           </motion.div>
           
@@ -216,9 +258,9 @@ export function CircuitBoard() {
         <motion.div 
           className="w-24 h-24 rounded-xl bg-surface-container-lowest flex flex-col items-center justify-center relative shadow-ambient"
           animate={{
-            boxShadow: `0 12px 32px -4px ${MODELS[activeNode].color}20`
+            boxShadow: combinedShadow
           }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.3 }}
         >
           {/* Ghost border */}
           <div className="absolute inset-0 rounded-xl border border-outline-variant opacity-15 pointer-events-none" />
@@ -227,27 +269,35 @@ export function CircuitBoard() {
           <div className="w-16 h-12 bg-surface rounded-md border border-outline-variant/20 flex items-center justify-center relative overflow-hidden shadow-inner">
             <motion.div 
               className="absolute inset-0 opacity-10"
-              animate={{ backgroundColor: MODELS[activeNode].color }}
-              transition={{ duration: 0.5 }}
+              animate={{ backgroundColor: activeColors.length > 0 ? latestColor : 'transparent' }}
+              transition={{ duration: 0.3 }}
             />
-            <Terminal className="w-5 h-5 text-on-surface-variant/50 relative z-10" />
             
             {/* Code lines animation */}
             <div className="absolute top-2 left-2 right-2 flex flex-col gap-1.5">
               <motion.div 
-                className="h-0.5 bg-primary/30 rounded-full w-3/4"
-                animate={{ opacity: [0.2, 0.8, 0.2] }}
+                className="h-0.5 rounded-full w-3/4"
+                animate={{ 
+                  opacity: activeColors.length > 0 ? [0.4, 1, 0.4] : 0.2,
+                  backgroundColor: activeColors.length > 0 ? latestColor : 'var(--color-primary)'
+                }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
               <motion.div 
-                className="h-0.5 bg-primary/30 rounded-full w-1/2"
-                animate={{ opacity: [0.2, 0.8, 0.2] }}
-                transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
+                className="h-0.5 rounded-full w-1/2"
+                animate={{ 
+                  opacity: activeColors.length > 0 ? [0.4, 1, 0.4] : 0.2,
+                  backgroundColor: activeColors.length > 0 ? latestColor : 'var(--color-primary)'
+                }}
+                transition={{ duration: 2, repeat: Infinity, delay: 0.2 }}
               />
               <motion.div 
-                className="h-0.5 bg-primary/30 rounded-full w-full"
-                animate={{ opacity: [0.2, 0.8, 0.2] }}
-                transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
+                className="h-0.5 rounded-full w-full"
+                animate={{ 
+                  opacity: activeColors.length > 0 ? [0.4, 1, 0.4] : 0.2,
+                  backgroundColor: activeColors.length > 0 ? latestColor : 'var(--color-primary)'
+                }}
+                transition={{ duration: 2, repeat: Infinity, delay: 0.4 }}
               />
             </div>
           </div>
@@ -256,10 +306,6 @@ export function CircuitBoard() {
           <div className="w-8 h-1.5 bg-surface-container-low mt-1.5 rounded-t-sm border border-outline-variant/20 border-b-0" />
           <div className="w-14 h-1.5 bg-outline-variant/20 rounded-sm" />
         </motion.div>
-        
-        <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-[0.6875rem] font-sans font-semibold uppercase tracking-wider text-on-surface-variant">
-          Client
-        </span>
       </div>
     </div>
   );
